@@ -1,4 +1,4 @@
-// tehtävästä luulisi saavan tällä hetkellä ainakin yhden pisteen. kahden ja kolmen pisteen osiot ovan työn alla.
+// Jos ymmärsin tehtävänannon oikein niin tässä on 2 pisteen koodi. saan uartin kautta laitettua sekvenssin ja jokaiselle ledille pystyy määräämään ajan kauanko se on päällä.
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
@@ -124,3 +124,4 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3) {
 K_THREAD_DEFINE(dis_thread, STACKSIZE, dispatcher_task, NULL, NULL, NULL, PRIORITY, 0, 0);
 
 K_THREAD_DEFINE(uart_thread, STACKSIZE, uart_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+
