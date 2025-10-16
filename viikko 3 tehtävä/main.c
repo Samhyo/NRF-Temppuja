@@ -1,3 +1,6 @@
+/*
+Kaikki viiden pisteen kohdat toimivat hyvin. debuggerin kanssa oli joitain väsäysongelmia, mutta botin ja kaverin kanssa todettiin sekin toimivaksi.
+*/
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/device.h>
@@ -212,3 +215,4 @@ int main(void) {
     k_thread_create(K_THREAD_STACK_DEFINE(debug_stack, STACKSIZE), debug_stack, STACKSIZE, debug_task, NULL, NULL, NULL, PRIORITY - 1, 0, K_NO_WAIT);
     return 0;
 }
+
