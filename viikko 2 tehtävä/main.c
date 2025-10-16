@@ -1,4 +1,4 @@
-// Jos ymmärsin tehtävänannon oikein niin tässä on 2 pisteen koodi. saan uartin kautta laitettua sekvenssin ja jokaiselle ledille pystyy määräämään ajan kauanko se on päällä.
+// Jos ymmärsin tehtävänannon oikein niin tässä on 3 pisteen koodi. saan uartin kautta laitettua sekvenssin ja jokaiselle ledille pystyy määräämään ajan kauanko se on päällä.
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/device.h>
@@ -201,5 +201,6 @@ int main(void) {
 
     return 0;
 }
+
 
 
