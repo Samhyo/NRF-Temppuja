@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.3.2 (Python 3.12.5 on win32)" generated="2025-11-10T23:36:08.066945" rpa="false" schemaversion="5">
+<suite id="s1" name="Traffic Light Tests" source="C:\NRF-TEMPPUJA\Robo\robot_tests\traffic_light_tests.robot">
+<test id="s1-t1" name="Connect Serial" line="18">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Connecting to ${board}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.116130" elapsed="0.000000"/>
+</kw>
+<kw name="Add Port" owner="SerialLibrary">
+<arg>${com}</arg>
+<arg>baudrate=${baud}</arg>
+<arg>encoding=ascii</arg>
+<doc>Adds new port with specified locator.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.116130" elapsed="0.012135"/>
+</kw>
+<kw name="Port Should Be Open" owner="SerialLibrary">
+<arg>${com}</arg>
+<doc>Fails if specified port is closed.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.128265" elapsed="0.000000"/>
+</kw>
+<kw name="Reset Input Buffer" owner="SerialLibrary">
+<doc>Clears input buffer.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.128265" elapsed="0.000000"/>
+</kw>
+<kw name="Reset Output Buffer" owner="SerialLibrary">
+<doc>Clears outout buffer.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.128265" elapsed="0.000000"/>
+</kw>
+<status status="PASS" start="2025-11-10T23:36:08.115128" elapsed="0.013137"/>
+</test>
+<test id="s1-t2" name="Valid Time String" line="25">
+<kw name="Reset Input Buffer" owner="SerialLibrary">
+<doc>Clears input buffer.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.129770" elapsed="0.000000"/>
+</kw>
+<kw name="Reset Output Buffer" owner="SerialLibrary">
+<doc>Clears outout buffer.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.129770" elapsed="0.000000"/>
+</kw>
+<kw name="Write Data" owner="SerialLibrary">
+<arg>${ok_seq}</arg>
+<arg>encoding=ascii</arg>
+<doc>Writes data into the port.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.129770" elapsed="0.000000"/>
+</kw>
+<kw name="Sleep" owner="BuiltIn">
+<msg time="2025-11-10T23:36:08.631239" level="INFO">Slept 500 milliseconds.</msg>
+<arg>0.5s</arg>
+<doc>Pauses the test executed for the given time.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.130775" elapsed="0.500464"/>
+</kw>
+<kw name="Read Until" owner="SerialLibrary">
+<msg time="2025-11-10T23:36:09.647649" level="INFO">${read} = 80
+</msg>
+<var>${read}</var>
+<arg>terminator=\n</arg>
+<arg>encoding=ascii</arg>
+<arg>timeout=2s</arg>
+<doc>Read until a termination sequence is found, size exceeded or timeout.</doc>
+<status status="PASS" start="2025-11-10T23:36:08.631239" elapsed="1.016410"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Received: ${read}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-11-10T23:36:09.647649" elapsed="0.000000"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${read}</arg>
+<arg>${ok_resp}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="PASS" start="2025-11-10T23:36:09.648650" elapsed="0.000000"/>
+</kw>
+<status status="PASS" start="2025-11-10T23:36:08.128265" elapsed="1.520385"/>
+</test>
+<test id="s1-t3" name="Invalid Time String" line="34">
+<kw name="Reset Input Buffer" owner="SerialLibrary">
+<doc>Clears input buffer.</doc>
+<status status="PASS" start="2025-11-10T23:36:09.648650" elapsed="0.000999"/>
+</kw>
+<kw name="Reset Output Buffer" owner="SerialLibrary">
+<doc>Clears outout buffer.</doc>
+<status status="PASS" start="2025-11-10T23:36:09.649649" elapsed="0.000000"/>
+</kw>
+<kw name="Write Data" owner="SerialLibrary">
+<arg>${err_seq}</arg>
+<arg>encoding=ascii</arg>
+<doc>Writes data into the port.</doc>
+<status status="PASS" start="2025-11-10T23:36:09.649649" elapsed="0.000000"/>
+</kw>
+<kw name="Sleep" owner="BuiltIn">
+<msg time="2025-11-10T23:36:10.150069" level="INFO">Slept 500 milliseconds.</msg>
+<arg>0.5s</arg>
+<doc>Pauses the test executed for the given time.</doc>
+<status status="PASS" start="2025-11-10T23:36:09.649649" elapsed="0.500420"/>
+</kw>
+<kw name="Read Until" owner="SerialLibrary">
+<msg time="2025-11-10T23:36:11.165774" level="INFO">${read} = -6
+</msg>
+<var>${read}</var>
+<arg>terminator=\n</arg>
+<arg>encoding=ascii</arg>
+<arg>timeout=2s</arg>
+<doc>Read until a termination sequence is found, size exceeded or timeout.</doc>
+<status status="PASS" start="2025-11-10T23:36:10.150069" elapsed="1.015705"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Received: ${read}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-11-10T23:36:11.165774" elapsed="0.000000"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${read}</arg>
+<arg>${err_resp}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="PASS" start="2025-11-10T23:36:11.165774" elapsed="0.001003"/>
+</kw>
+<status status="PASS" start="2025-11-10T23:36:09.648650" elapsed="1.518127"/>
+</test>
+<test id="s1-t4" name="Disconnect Serial" line="43">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Disconnecting ${board}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-11-10T23:36:11.166777" elapsed="0.000000"/>
+</kw>
+<kw name="Delete Port" owner="SerialLibrary" type="TEARDOWN">
+<arg>${com}</arg>
+<doc>Deletes specified port.</doc>
+<status status="PASS" start="2025-11-10T23:36:11.167776" elapsed="0.000000"/>
+</kw>
+<status status="PASS" start="2025-11-10T23:36:11.166777" elapsed="0.000999"/>
+</test>
+<status status="PASS" start="2025-11-10T23:36:08.068945" elapsed="3.099829"/>
+</suite>
+<statistics>
+<total>
+<stat pass="4" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="Traffic Light Tests" id="s1" pass="4" fail="0" skip="0">Traffic Light Tests</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
