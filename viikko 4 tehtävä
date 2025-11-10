@@ -1,0 +1,272 @@
+// Tehtävä on 2 pisteen arvoinen 
+// Parseri sisältää vaaditut virhetilanteet
+// Uartista tuleva merkkijono parsitaan ja ohjaa ledejä
+
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/uart.h>
+#include <string.h>
+#include <stdlib.h>
+#ifdef CONFIG_TIMING_FUNCTIONS
+#include <zephyr/timing/timing.h>
+#endif
+#include <ctype.h>
+
+#define TIME_LEN_ERROR    -1
+#define TIME_VALUE_ERROR  -3
+#define TIME_ZERO_ERROR   -4
+#define TIME_NULL_ERROR   -5
+#define TIME_NONNUM_ERROR -6
+
+int time_parse(const char *time)
+{
+    if (!time) return TIME_NULL_ERROR;
+    if (strlen(time) != 6) return TIME_LEN_ERROR;
+    for (int i = 0; i < 6; i++) if (!isdigit((unsigned char)time[i])) return TIME_NONNUM_ERROR;
+    int hh = (time[0]-'0')*10 + (time[1]-'0');
+    int mm = (time[2]-'0')*10 + (time[3]-'0');
+    int ss = (time[4]-'0')*10 + (time[5]-'0');
+    if (hh<0||hh>23||mm<0||mm>59||ss<0||ss>59) return TIME_VALUE_ERROR;
+    int total = hh*3600 + mm*60 + ss;
+    if (total==0) return TIME_ZERO_ERROR;
+    return total;
+}
+
+#define STACKSIZE 500
+#define PRIORITY 5
+
+#define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
+static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
+
+static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
+static const struct gpio_dt_spec blue = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios);
+
+#define BUTTON_0 DT_ALIAS(sw0)
+#define BUTTON_1 DT_ALIAS(sw1)
+#define BUTTON_2 DT_ALIAS(sw2)
+#define BUTTON_3 DT_ALIAS(sw3)
+#define BUTTON_4 DT_ALIAS(sw4)
+static const struct gpio_dt_spec button_0 = GPIO_DT_SPEC_GET_OR(BUTTON_0, gpios, {0});
+static const struct gpio_dt_spec button_1 = GPIO_DT_SPEC_GET_OR(BUTTON_1, gpios, {0});
+static const struct gpio_dt_spec button_2 = GPIO_DT_SPEC_GET_OR(BUTTON_2, gpios, {0});
+static const struct gpio_dt_spec button_3 = GPIO_DT_SPEC_GET_OR(BUTTON_3, gpios, {0});
+static const struct gpio_dt_spec button_4 = GPIO_DT_SPEC_GET_OR(BUTTON_4, gpios, {0});
+
+static struct gpio_callback button_0_data;
+static struct gpio_callback button_1_data;
+static struct gpio_callback button_2_data;
+static struct gpio_callback button_3_data;
+static struct gpio_callback button_4_data;
+
+K_FIFO_DEFINE(cmd_fifo);
+
+struct cmd_t {
+    void *fifo_reserved;
+    char cmds[10];
+    int length;
+    uint64_t timestamp;
+};
+
+int init_uart(void)
+{
+    if (!device_is_ready(uart_dev)) return 1;
+    return 0;
+}
+
+K_SEM_DEFINE(sem_red, 0, 1);
+K_SEM_DEFINE(sem_yellow, 0, 1);
+K_SEM_DEFINE(sem_green, 0, 1);
+K_SEM_DEFINE(sem_release, 0, 1);
+K_SEM_DEFINE(sem_debug, 0, 1);
+
+static void red_led_task(void *, void *, void*);
+static void yellow_led_task(void *, void *, void*);
+static void green_led_task(void *, void *, void*);
+static void uart_task(void *, void *, void*);
+static void dispatcher_task(void *, void *, void*);
+static void debug_task(void *, void *, void*);
+
+K_THREAD_DEFINE(red_thread, STACKSIZE, red_led_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(yellow_thread, STACKSIZE, yellow_led_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(green_thread, STACKSIZE, green_led_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(uart_thread, STACKSIZE, uart_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(dispatcher_thread, STACKSIZE, dispatcher_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(debug_thread, STACKSIZE, debug_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+
+static void enqueue_command(char c)
+{
+    struct cmd_t *item = k_malloc(sizeof(*item));
+    if (!item) return;
+    item->cmds[0] = c;
+    item->length = 1;
+    item->timestamp = k_uptime_get();
+    k_fifo_put(&cmd_fifo, item);
+}
+
+static void button_red_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins){ enqueue_command('R'); }
+static void button_yellow_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins){ enqueue_command('Y'); }
+static void button_green_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins){ enqueue_command('G'); }
+static void button_debug_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins){ enqueue_command('D'); }
+static void button_extra_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins){ enqueue_command('F'); }
+
+static int init_buttons(void)
+{
+    const struct gpio_dt_spec buttons[] = {button_0, button_1, button_2, button_3, button_4};
+    struct gpio_callback *callbacks[] = {&button_0_data, &button_1_data, &button_2_data, &button_3_data, &button_4_data};
+    void (*handlers[])(const struct device *, struct gpio_callback *, uint32_t) = {button_red_handler, button_yellow_handler, button_green_handler, button_debug_handler, button_extra_handler};
+    for (int i = 0; i < 5; i++){
+        if (!gpio_is_ready_dt(&buttons[i])) return -1;
+        if (gpio_pin_configure_dt(&buttons[i], GPIO_INPUT) != 0) return -1;
+        if (gpio_pin_interrupt_configure_dt(&buttons[i], GPIO_INT_EDGE_TO_ACTIVE) != 0) return -1;
+        gpio_init_callback(callbacks[i], handlers[i], BIT(buttons[i].pin));
+        gpio_add_callback(buttons[i].port, callbacks[i]);
+    }
+    return 0;
+}
+
+static void red_led_task(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+    while (1){
+    k_sem_take(&sem_red, K_FOREVER);
+        gpio_pin_set_dt(&red, 1);
+        k_sleep(K_MSEC(1000));
+        gpio_pin_set_dt(&red, 0);
+    k_sem_give(&sem_release);
+        k_yield();
+    }
+}
+
+static void yellow_led_task(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+    while (1){
+    k_sem_take(&sem_yellow, K_FOREVER);
+        gpio_pin_set_dt(&red, 1);
+        gpio_pin_set_dt(&green, 1);
+        k_sleep(K_MSEC(1000));
+        gpio_pin_set_dt(&red, 0);
+        gpio_pin_set_dt(&green, 0);
+    k_sem_give(&sem_release);
+    }
+}
+
+static void green_led_task(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+    while (1){
+    k_sem_take(&sem_green, K_FOREVER);
+        gpio_pin_set_dt(&green, 1);
+        k_sleep(K_MSEC(1000));
+        gpio_pin_set_dt(&green, 0);
+        gpio_pin_set_dt(&red, 0);
+    k_sem_give(&sem_release);
+    }
+}
+
+static char buffer[10];
+static int index = 0;
+
+static void uart_task(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+    unsigned char ch;
+    while (1){
+        if (uart_poll_in(uart_dev, &ch) == 0){
+            if (ch != '\r'){
+                buffer[index++] = ch;
+            } else {
+                buffer[index] = '\0';
+                int ret = time_parse(buffer);
+                if (ret >= 0){
+                    gpio_pin_set_dt(&green, 1);
+                    k_sleep(K_SECONDS(1));
+                    gpio_pin_set_dt(&green, 0);
+                } else {
+                    gpio_pin_set_dt(&red, 1);
+                    k_sleep(K_SECONDS(1));
+                    gpio_pin_set_dt(&red, 0);
+                    printk("Parser error: %d\n", ret);
+                }
+                index = 0;
+            }
+            if (index >= (int)sizeof(buffer)) index = 0;
+        }
+        k_msleep(20);
+    }
+}
+
+static void dispatcher_task(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+    while (1){
+        struct cmd_t *rec_item = k_fifo_get(&cmd_fifo, K_FOREVER);
+        for (int i = 0; i < rec_item->length; i++){
+            char ch = rec_item->cmds[i];
+            if (ch >= 'a' && ch <= 'z') ch = ch - 'a' + 'A';
+            switch (ch){
+            case 'R': k_sem_give(&sem_red); break;
+            case 'Y': k_sem_give(&sem_yellow); break;
+            case 'G': k_sem_give(&sem_green); break;
+            case 'D': k_sem_give(&sem_debug); break;
+            default: printk("Was given wrong char, give a new one\n"); break;
+            }
+            k_sem_take(&sem_release, K_FOREVER);
+        }
+        k_free(rec_item);
+    }
+}
+
+static int init_leds(void)
+{
+    int r = gpio_pin_configure_dt(&red, GPIO_OUTPUT_ACTIVE);
+    r |= gpio_pin_configure_dt(&green, GPIO_OUTPUT_ACTIVE);
+    r |= gpio_pin_configure_dt(&blue, GPIO_OUTPUT_ACTIVE);
+    gpio_pin_set_dt(&red, 0);
+    gpio_pin_set_dt(&green, 0);
+    gpio_pin_set_dt(&blue, 0);
+    return r;
+}
+
+static void debug_task(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+    while (1){
+        k_sem_take(&sem_debug, K_FOREVER);
+        struct cmd_t *received = k_fifo_get(&cmd_fifo, K_FOREVER);
+        if (received){
+            printk("Debug received: %lld\n", received->timestamp);
+            k_free(received);
+        }
+        k_sem_give(&sem_release);
+        k_yield();
+    }
+}
+
+int main(void)
+{
+    if (init_uart() != 0){
+        printk("UART initialization failed\n");
+        return 1;
+    }
+#ifdef CONFIG_TIMING_FUNCTIONS
+    timing_init();
+    timing_start();
+    timing_t start_time = timing_counter_get();
+#endif
+    k_msleep(100);
+    init_leds();
+    init_buttons();
+    printk("Program started..\n");
+#ifdef CONFIG_TIMING_FUNCTIONS
+    timing_t end_time = timing_counter_get();
+    timing_stop();
+    uint64_t timing_ns = timing_cycles_to_ns(timing_cycles_get(&start_time, &end_time));
+    printk("Initialization: %lld ns\n", timing_ns);
+#endif
+    while (1) k_sleep(K_MSEC(100));
+    return 0;
+}
